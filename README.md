@@ -1,131 +1,101 @@
-# Raspberry Pi 5 Vision AI
+# Raspberry Pi 5 Vision AI Pipeline
 
-라즈베리파이 5를 위한 최적화된 비전 AI 시스템입니다. Edge TPU 없이 라즈베리파이 5의 CPU만으로 세그멘테이션과 분류 모델을 실행합니다.
+초경량 TFLite 세그멘테이션 + 분류 모델을 **라즈베리파이 5**의 CPU만으로 실행하는 Edge AI 프로젝트입니다. `vision_app` 컨테이너가 카메라 이미지를 주기적으로 캡처·추론하고, 결과를 **Redis** 에 게시하여 다른 마이크로서비스가 쉽게 구독할 수 있도록 설계되었습니다.
 
-## 시스템 구성
+<p align="center">
+  <img src="https://raw.githubusercontent.com/daisybum/raspberry-pi4-visionAI/main/.docs/arch.svg" alt="architecture" width="650" />
+</p>
 
-이 프로젝트는 다음과 같은 구성 요소로 이루어져 있습니다:
-
-1. **Redis 서버**: 이미지 데이터 저장 및 서비스 간 통신을 위한 Pub/Sub 메시징 시스템
-2. **추론 서버**: 세그멘테이션 및 분류 모델을 실행하는 서버 (Edge TPU 대신 라즈베리파이 5 CPU 사용)
-3. **캡처 애플리케이션**: 카메라에서 이미지를 주기적으로 캡처하여 Redis에 게시
-4. **추론 클라이언트**: 이미지 처리 요청을 보내고 결과를 처리하는 클라이언트
+---
 
 ## 주요 특징
 
-- **Edge TPU 의존성 제거**: 라즈베리파이 5의 CPU만으로 추론을 수행
-- **최적화된 TFLite 모델**: 양자화 및 최적화를 통해 라즈베리파이 5에서 빠른 추론 가능
-- **통합 추론 엔드포인트**: 세그멘테이션과 분류를 한 번의 요청으로 처리하는 `/combined` 엔드포인트 제공
-- **멀티스레딩 최적화**: 라즈베리파이 5의 멀티코어 CPU를 활용한 병렬 처리
+* **Edge TPU 불필요** – 순수 CPU(TFLite XNNPACK delegate) 만으로 2-3 FPS 달성
+* **이중 추론** – 세그멘테이션 + 분류 모델을 한 번에 호출하여 네트워크 오버헤드 최소화
+* **경량 컨테이너** – Slim Python + `tflite-runtime` 로 이미지 크기 &lt; 120 MB
+* **Redis Pub/Sub** – 결과를 `result:<uuid>` 키로 TTL 1h 저장, 다양한 언어 클라이언트와 호환
+* **유연한 모드**
+  * `vision_processor.py` – 실기 버전(카메라 필요, 캡처 주기 ENV로 조정)
+  * `one_img_processor.py` – 개발/디버깅 버전(샘플 이미지 반복 추론)
+* **간단한 모델 교체** – `models/` 폴더에 새 TFLite 업로드 후 ENV 경로만 변경
 
-## 설치 및 실행
+---
 
-### 1. 모델 생성
+## 빠른 시작
 
-먼저 최적화된 TFLite 모델을 생성합니다:
+### 1. 요구 사항
 
-```bash
-cd models
-python create_optimized_models.py
-```
-
-이 스크립트는 다음 두 가지 모델을 생성합니다:
-- `seg_model.tflite`: 세그멘테이션 모델
-- `cls_model.tflite`: 분류 모델
-
-### 2. Docker Compose 설정
-
-새로운 Docker Compose 설정을 적용합니다:
+* Raspberry Pi 4 (Bullseye 64-bit)
+* Docker & Docker Compose
+* CSI 카메라 모듈 (실기 모드)
 
 ```bash
-mv docker-compose.yml.new docker-compose.yml
+# 설치 예시 (Raspberry Pi)
+sudo apt update && sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker $USER && newgrp docker
 ```
 
-### 3. 시스템 실행
-
-Docker Compose를 사용하여 전체 시스템을 실행합니다:
+### 2. 프로젝트 클론
 
 ```bash
-docker-compose up -d
+git clone https://github.com/daisybum/raspberry-pi4-visionAI.git
+cd raspberry-pi4-visionAI
 ```
 
-## 구성 요소 상세 설명
+### 3. 컨테이너 빌드 & 실행
 
-### 추론 서버 (`inference_server/main.py`)
-
-- TensorFlow Lite 런타임을 사용하여 최적화된 모델 실행
-- 세 가지 엔드포인트 제공:
-  - `/segment`: 이미지 세그멘테이션
-  - `/classify`: 이미지 분류
-  - `/combined`: 세그멘테이션과 분류를 동시에 수행
-- 멀티스레딩을 통한 성능 최적화
-
-### 추론 클라이언트 (`inference_client/run_client.py`)
-
-- Redis Pub/Sub을 통해 새 이미지 알림을 수신
-- 환경 변수 `INFERENCE_MODE`를 통해 추론 모드 선택 가능 (combined, segment, classify)
-- 추론 시간 및 결과 상세 로깅
-
-### 모델 최적화 (`models/create_optimized_models.py`)
-
-- MobileNetV2 기반의 경량 모델 생성
-- 양자화 및 최적화를 통한 추론 속도 향상
-- 라즈베리파이 5 CPU에 최적화된 TFLite 모델 생성
-
-## 성능 최적화 팁
-
-1. **NUM_THREADS 조정**: 라즈베리파이 5의 코어 수에 맞게 `NUM_THREADS` 환경 변수 조정
-2. **모델 크기 축소**: 필요에 따라 `create_optimized_models.py`에서 모델 입력 크기 조정
-3. **캡처 주기 조정**: 필요에 따라 `INTERVAL` 환경 변수를 조정하여 캡처 주기 변경
-
-## API 엔드포인트
-
-### 세그멘테이션 (`/segment`)
-
-```json
-POST /segment
-{
-  "redis_key": "img:12345"
-}
+```bash
+docker-compose up --build -d
 ```
 
-응답:
-```json
-{
-  "mask_shape": [224, 224],
-  "unique_labels": [0, 1],
-  "inference_time_ms": 150
-}
+> 📌 **TIP**: 라즈베리파이 없이 노트북에서 테스트하려면 `docker-compose.yml` 대신 `one_img_processor.py` 를 직접 실행해 보세요.
+
+```bash
+python -m pip install -r vision_app/requirements.txt
+python vision_app/one_img_processor.py
 ```
 
-### 분류 (`/classify`)
+---
 
-```json
-POST /classify
-{
-  "redis_key": "img:12345"
-}
+## 디렉터리 구조
+
+```
+│  docker-compose.yml     # Redis + Vision App 스택 정의
+│  README.md              # (현재 파일)
+│
+├─data/
+│      example.jpg        # 샘플 이미지
+│
+├─models/
+│      seg_model_int8.tflite
+│      cls_model_int8.tflite
+│
+└─vision_app/
+        Dockerfile        # Slim Python 기반 실행 이미지
+        requirements.txt  # 런타임 의존성
+        vision_processor.py   # 카메라 캡처 + 추론 (실기)
+        one_img_processor.py  # 이미지 파일 반복 추론 (개발)
 ```
 
-응답:
-```json
-{
-  "id": 3,
-  "score": 0.92,
-  "inference_time_ms": 120
-}
-```
+---
 
-### 통합 추론 (`/combined`)
+## 환경 변수 요약
 
-```json
-POST /combined
-{
-  "redis_key": "img:12345"
-}
-```
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `SEG_MODEL` | `/models/seg_model_int8.tflite` | 세그멘테이션 모델 경로 |
+| `CLS_MODEL` | `/models/cls_model_int8.tflite` | 분류 모델 경로 |
+| `REDIS_HOST`| `redis` | Redis 서비스 이름/IP |
+| `REDIS_PORT`| `6379` | Redis 포트 |
+| `INTERVAL` | `120` | 캡처 주기(초) – 실기 모드 |
+| `NUM_THREADS` | `2` | TFLite 추론 스레드 수 |
 
-응답:
+환경 변수는 `docker-compose.yml` 에 정의되어 있으며 필요에 따라 오버라이드할 수 있습니다.
+
+---
+
+## 결과 포맷 예시
+
 ```json
 {
   "segmentation": {
@@ -139,3 +109,37 @@ POST /combined
   "inference_time_ms": 200
 }
 ```
+
+Redis 키(`result:<uuid>`)에 JSON 문자열로 저장되므로, 다음과 같이 간단히 조회할 수 있습니다:
+
+```python
+import redis, json
+r = redis.Redis(host="REDIS_IP", port=6379)
+raw = r.get("result:abc123...")
+print(json.loads(raw))
+```
+
+---
+
+## 개발 가이드
+
+1. **모델 교체**
+   * `models/` 에 새 TFLite 모델 복사 → `docker-compose.yml` 의 환경 변수 수정
+2. **카메라 없는 개발**
+   * `python vision_app/one_img_processor.py`
+3. **컨테이너 재빌드**
+   * `docker compose build vision_app`
+4. **로그 확인**
+   * `docker compose logs -f vision_app`
+
+---
+
+## 기여(Contributing)
+
+Pull Request 환영합니다!  버그 리포트·성능 개선·문서 업데이트 등 어떤 기여든 감사히 검토하겠습니다.
+
+---
+
+## 라이선스
+
+MIT License © 2025 DaisyBum & Contributors
