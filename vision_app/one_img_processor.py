@@ -173,21 +173,25 @@ def process_image(
         pil = pil.convert("RGB")
 
         # 세그멘테이션
+        seg_start = time.time()
         seg_in = seg_interp.get_input_details()[0]
         seg_arr = _prepare_input(pil, (seg_in["shape"][2], seg_in["shape"][1]), seg_in)
         seg_interp.set_tensor(seg_in["index"], seg_arr)
         seg_interp.invoke()
         seg_out = seg_interp.get_output_details()[0]
         mask = seg_interp.get_tensor(seg_out["index"])[0]
+        seg_elapsed_ms = (time.time() - seg_start) * 1000
         mask = np.argmax(mask, -1) if mask.shape[-1] > 1 else (mask > 0).astype(np.uint8)
 
         # 분류
+        cls_start = time.time()
         cls_in = cls_interp.get_input_details()[0]
         cls_arr = _prepare_input(pil, (cls_in["shape"][2], cls_in["shape"][1]), cls_in)
         cls_interp.set_tensor(cls_in["index"], cls_arr)
         cls_interp.invoke()
         cls_out = cls_interp.get_output_details()[0]
         scores = cls_interp.get_tensor(cls_out["index"])[0]
+        cls_elapsed_ms = (time.time() - cls_start) * 1000
         top_idx = int(scores.argmax())
         top_score = float(scores[top_idx])
 
@@ -223,6 +227,8 @@ def process_image(
                 "unique_labels": np.unique(mask).tolist(),
             },
             "classification": {"id": top_idx, "score": top_score},
+            "seg_inference_time_ms": seg_elapsed_ms,
+            "cls_inference_time_ms": cls_elapsed_ms,
             "inference_time_ms": int((time.time() - ts0) * 1000),
         }
     except Exception as exc:
@@ -266,10 +272,12 @@ def main() -> None:
                     logger.info(f"결과 Redis 저장 → {key}")
 
             logger.info(
-                "Seg labels=%s | Cls=(%d, %.3f) | %.1f ms",
+                "Seg labels=%s | Seg=%.1f ms | Cls=(%d, %.3f, %.1f ms) | Total=%.1f ms",
                 result.get("segmentation", {}).get("unique_labels"),
+                result.get("seg_inference_time_ms", 0),
                 result.get("classification", {}).get("id", -1),
                 result.get("classification", {}).get("score", 0.0),
+                result.get("cls_inference_time_ms", 0),
                 result.get("inference_time_ms", 0),
             )
         except KeyboardInterrupt:
