@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  # Redis (메모리 캐시 & Pub/Sub)
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+  # Edge-TPU 게이트웨이
+  edgetpu_server:
+    build: ./edgetpu_server
+    privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb          # Coral USB 동글
+    volumes:
+      - ./models:/models:ro                # seg.tflite / cls.tflite
+    environment:
+      - SEG_MODEL=/models/seg_edgetpu.tflite
+      - CLS_MODEL=/models/cls_edgetpu.tflite
+      - REDIS_HOST=redis
+    ports:
+      - "8080:8080"                        # 필요 없으면 삭제
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # 카메라 캡처(Producer)
+  capture_app:
+    build: ./capture_app
+    privileged: true                       # libcamera 사용
+    devices:
+      - /dev:/dev
+    volumes:
+      - /run/udev:/run/udev:ro             # ★ 중요
+    environment:
+      - REDIS_HOST=redis
+      - INTERVAL=30                        # 캡처 주기(초)
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Segmentation Client
+  seg_app:
+    build: ./seg_app
+    environment:
+      - REDIS_HOST=redis
+      - TPU_ENDPOINT=http://edgetpu_server:8080
+    depends_on:
+      - edgetpu_server
+    restart: unless-stopped
+
+  # Classification Client
+  cls_app:
+    build: ./cls_app
+    environment:
+      - REDIS_HOST=redis
+      - TPU_ENDPOINT=http://edgetpu_server:8080
+    depends_on:
+      - edgetpu_server
+    restart: unless-stopped

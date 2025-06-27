@@ -1,0 +1,10 @@
+numpy
+pillow
+redis
+tqdm
+cython            # pycocotools 컴파일용
+pycocotools
+jinja2
+pyyaml
+ply
+tflite-runtime

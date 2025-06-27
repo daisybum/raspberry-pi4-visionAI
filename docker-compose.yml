@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  # Redis (메모리 캐시)
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+  # 통합 비전 처리 애플리케이션
+  vision_app:
+    build: ./vision_app
+    privileged: true                       # 카메라 접근을 위해 필요
+    devices:
+      - /dev:/dev                          # 카메라 장치 접근
+    volumes:
+      - ./models:/models:ro                # 모델 파일 마운트
+      - /run/udev:/run/udev:ro             # 카메라 접근에 필요
+      - ./data:/app/data:ro                # 데이터 디렉토리 마운트 추가
+    environment:
+      - SEG_MODEL=/models/seg_model_int8.tflite
+      - CLS_MODEL=/models/cls_model_int8.tflite
+      - REDIS_HOST=redis
+      - INTERVAL=120                        # 캡처 주기(초)
+      - NUM_THREADS=2                       # Raspberry Pi 5 CPU 코어 수에 맞게 조정
+    depends_on:
+      - redis
+    restart: unless-stopped
