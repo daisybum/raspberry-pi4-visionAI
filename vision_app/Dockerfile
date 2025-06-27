@@ -73,7 +73,7 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
 
 # ── 애플리케이션 복사 & 기본 실행 ───────────────────────────────────────────
 WORKDIR /app
-# COPY one_img_processor.py .
-COPY vision_processor.py .
-# ENTRYPOINT ["python", "-u", "one_img_processor.py"]
-ENTRYPOINT ["python", "-u", "vision_processor.py"]
+COPY one_img_processor.py .
+# COPY vision_processor.py .
+ENTRYPOINT ["python", "-u", "one_img_processor.py"]
+# ENTRYPOINT ["python", "-u", "vision_processor.py"]
