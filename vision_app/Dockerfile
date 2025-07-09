@@ -75,4 +75,4 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
 WORKDIR /app
 COPY vision_processor_v2.py .
 # 이전 스크립트(COPY/ENTRYPOINT) 주석 정리
-ENTRYPOINT ["python", "-u", "vision_processor_v2.py"]
+ENTRYPOINT ["python", "-u", "vision_processor_v2.py", "--save_mask"]
