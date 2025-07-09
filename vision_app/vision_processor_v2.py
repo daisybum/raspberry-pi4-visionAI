@@ -194,7 +194,7 @@ def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Vision Processor v2 – 이미지 + 센서 JSON 동시 입력")
     p.add_argument("--image", default="data/20220428_000_40P0S1R1AX_0_20220702_065412.jpg", help="입력 이미지 파일 경로")
     p.add_argument("--sensor_json", default="data/20220428_000_40P0S1R1AX_0_20220702_065412.json", help="센서 JSON 파일 경로")
-    p.add_argument("--seg_model", default="models/seg_model__sensor_int8.tflite", help="세그멘테이션 .tflite 경로")
+    p.add_argument("--seg_model", default="models/seg_model_sensor_int8.tflite", help="세그멘테이션 .tflite 경로")
     p.add_argument("--cls_model", default="models/cls_model_int8.tflite", help="분류 .tflite 경로 (선택)")
     p.add_argument("--delegate", choices=["edgetpu"], default=None, help="사용 delegate")
     p.add_argument("--output_dir", default="v2_output", help="결과 저장 폴더")
