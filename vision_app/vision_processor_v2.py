@@ -144,14 +144,23 @@ def process_single(
         # Segmentation
         # ------------------------------
         seg_inputs = seg_interp.get_input_details()
-        seg_img_in = seg_inputs[0]
-        seg_size = (seg_img_in["shape"][2], seg_img_in["shape"][1])
-        seg_arr = _prepare_input(pil, seg_size, seg_img_in)
-        seg_interp.set_tensor(seg_img_in["index"], seg_arr)
 
-        # 센서 입력(옵션)
-        if len(seg_inputs) > 1:
-            sensor_in = seg_inputs[1]
+        # 입력 텐서 구분: 이미지 입력은 4D (N,H,W,C) 또는 3D (H,W,C)
+        img_in   = next((inp for inp in seg_inputs if len(inp["shape"]) >= 3), None)
+        sensor_in = next((inp for inp in seg_inputs if len(inp["shape"]) == 2), None)
+
+        if img_in is None:
+            raise RuntimeError("세그멘테이션 모델에서 이미지 입력 텐서를 찾을 수 없습니다.")
+
+        seg_size = (
+            img_in["shape"][2] if len(img_in["shape"]) >= 3 else img_in["shape"][1],
+            img_in["shape"][1] if len(img_in["shape"]) >= 3 else img_in["shape"][0],
+        )
+        seg_arr = _prepare_input(pil, seg_size, img_in)
+        seg_interp.set_tensor(img_in["index"], seg_arr)
+
+        # 센서 입력(있는 경우)
+        if sensor_in is not None:
             sensor_arr_use = sensor_vec.astype(sensor_in["dtype"])
             if sensor_arr_use.shape != tuple(sensor_in["shape"]):
                 sensor_arr_use = sensor_arr_use.reshape(sensor_in["shape"])
