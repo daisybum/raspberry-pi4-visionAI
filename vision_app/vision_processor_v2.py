@@ -252,6 +252,9 @@ def main():
         mask_img.save(out_dir / f"{img_path.stem}_mask.png")
         logger.info("마스크 PNG 저장 완료")
 
+    if "segmentation" in result:
+        logger.info("세그멘테이션 라벨 → %s", result["segmentation"]["unique_labels"])
+
     if "classification" in result:
         logger.info(
             "분류 결과 → id=%d, score=%.3f",
