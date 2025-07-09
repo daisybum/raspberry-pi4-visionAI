@@ -195,11 +195,22 @@ def process_single(
             cls_out = cls_interp.get_output_details()[0]
             cls_pred = cls_interp.get_tensor(cls_out["index"])[0]
 
-    return {
-        "mask": mask,
-        "cls_pred": cls_pred,
-        "elapsed": time.time() - ts0,
+    # 결과 포맷: 기존 vision_processor.py와 동일한 구조 유지 + mask 원본 보존
+    result: Dict[str, Any] = {
+        "mask": mask,  # 마스크 원본(추가 저장용)
+        "segmentation": {
+            "mask_shape": mask.shape,
+            "unique_labels": np.unique(mask).tolist(),
+        },
+        "inference_time_ms": int((time.time() - ts0) * 1000),
     }
+
+    if cls_pred is not None:
+        top_idx = int(cls_pred.argmax())
+        top_score = float(cls_pred[top_idx])
+        result["classification"] = {"id": top_idx, "score": top_score}
+
+    return result
 
 # --------------------------------------------------------------------------------------
 # CLI
@@ -234,15 +245,19 @@ def main():
         cls_interp.allocate_tensors()
 
     result = process_single(img_path, sensor_json_path, seg_interp, cls_interp)
-    logger.info("처리 완료 – %.3f s", result["elapsed"])
+    logger.info("처리 완료 – %.3f s", result["inference_time_ms"] / 1000.0)
 
     if args.save_mask:
         mask_img = Image.fromarray(result["mask"])
         mask_img.save(out_dir / f"{img_path.stem}_mask.png")
         logger.info("마스크 PNG 저장 완료")
 
-    if result["cls_pred"] is not None:
-        logger.info("분류 logits: %s", np.array2string(result["cls_pred"], precision=3, separator=", "))
+    if "classification" in result:
+        logger.info(
+            "분류 결과 → id=%d, score=%.3f",
+            result["classification"]["id"],
+            result["classification"]["score"],
+        )
 
 
 if __name__ == "__main__":
