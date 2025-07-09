@@ -110,6 +110,12 @@ def _prepare_input(pil: Image.Image, target_hw: Tuple[int, int], input_info: Dic
         arr = arr.astype(np.float32) / 255.0
     elif dtype == np.uint8:
         arr = arr.astype(np.uint8)
+    elif dtype == np.int8:
+        # int8 대칭 양자화 처리
+        scale, zero_point = input_info.get("quantization", (1.0, 0))
+        if scale == 0:
+            scale = 1.0 / 127.0
+        arr = ((arr.astype(np.float32) / 255.0) / scale + zero_point).astype(np.int8)
     else:
         raise ValueError(f"지원되지 않는 입력 dtype: {dtype}")
 
