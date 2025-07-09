@@ -17,8 +17,9 @@ services:
       - ./models:/models:ro                # 모델 파일 마운트
       - /run/udev:/run/udev:ro             # 카메라 접근에 필요
       - ./data:/app/data:ro                # 데이터 디렉토리 마운트 추가
+      - /mnt/sda1:/app/results             # USB 드라이브(32G) → 결과 폴더
     environment:
-      - SEG_MODEL=/models/seg_model_int8.tflite
+      - SEG_MODEL=/models/seg_model_sensor_int8.tflite
       - CLS_MODEL=/models/cls_model_int8.tflite
       - REDIS_HOST=redis
       - INTERVAL=120                        # 캡처 주기(초)
