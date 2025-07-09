@@ -36,6 +36,21 @@ except ModuleNotFoundError:
     tflite = tf.lite  # pyright: ignore
 
 # --------------------------------------------------------------------------------------
+# Visualization palette (5 classes as example)
+# --------------------------------------------------------------------------------------
+
+PALETTE = np.array(
+    [
+        (0, 0, 0),      # background
+        (255, 0, 0),    # class 1
+        (0, 255, 0),    # class 2
+        (0, 0, 255),    # class 3
+        (255, 255, 0),  # class 4
+    ],
+    dtype=np.uint8,
+)
+
+# --------------------------------------------------------------------------------------
 # 설정 & 로거
 # --------------------------------------------------------------------------------------
 
@@ -183,6 +198,16 @@ def process_single(
             mask = (mask > 0.0).astype(np.uint8)
 
         # ------------------------------
+        # Visualization (color mask & overlay)
+        # ------------------------------
+        orig_np = np.asarray(pil)
+        mask_resized = np.array(
+            Image.fromarray(mask).resize((orig_np.shape[1], orig_np.shape[0]), Image.NEAREST)
+        )
+        color_mask = PALETTE[mask_resized % len(PALETTE)]
+        overlay = (0.4 * orig_np + 0.6 * color_mask).astype(np.uint8)
+
+        # ------------------------------
         # Classification (선택)
         # ------------------------------
         cls_pred = None
@@ -202,6 +227,7 @@ def process_single(
             "mask_shape": mask.shape,
             "unique_labels": np.unique(mask).tolist(),
         },
+        "overlay": overlay,  # 시각화 이미지
         "inference_time_ms": int((time.time() - ts0) * 1000),
     }
 
@@ -223,7 +249,7 @@ def _build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--seg_model", default="/models/seg_model_sensor_int8.tflite", help="세그멘테이션 .tflite 경로")
     p.add_argument("--cls_model", default="/models/cls_model_int8.tflite", help="분류 .tflite 경로 (선택)")
     p.add_argument("--delegate", choices=["edgetpu"], default=None, help="사용 delegate")
-    p.add_argument("--output_dir", default="v2_output", help="결과 저장 폴더")
+    p.add_argument("--output_dir", default="results", help="결과 저장 폴더")
     p.add_argument("--save_mask", action="store_true", help="세그멘테이션 마스크 PNG 저장 여부")
     return p
 
@@ -248,9 +274,13 @@ def main():
     logger.info("처리 완료 – %.3f s", result["inference_time_ms"] / 1000.0)
 
     if args.save_mask:
+        # 마스크 저장
         mask_img = Image.fromarray(result["mask"])
         mask_img.save(out_dir / f"{img_path.stem}_mask.png")
-        logger.info("마스크 PNG 저장 완료")
+
+        # 컬러 마스크 & 오버레이 저장
+        Image.fromarray(result["overlay"]).save(out_dir / f"{img_path.stem}_overlay.png")
+        logger.info("마스크·오버레이 PNG 저장 완료 → %s", out_dir)
 
     if "segmentation" in result:
         logger.info("세그멘테이션 라벨 → %s", result["segmentation"]["unique_labels"])
