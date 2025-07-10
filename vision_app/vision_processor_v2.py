@@ -182,7 +182,10 @@ def process_single(
 
         # 센서 입력(있는 경우)
         if sensor_in is not None:
-            sensor_arr_use = sensor_vec.astype(sensor_in["dtype"])
+            scale, zero = sensor_in.get("quantization", (1.0, 0))
+            if scale == 0:
+                scale = 1.0
+            sensor_arr_use = (sensor_vec / float(scale) + float(zero)).astype(sensor_in["dtype"])
             if sensor_arr_use.shape != tuple(sensor_in["shape"]):
                 sensor_arr_use = sensor_arr_use.reshape(sensor_in["shape"])
             seg_interp.set_tensor(sensor_in["index"], sensor_arr_use)
